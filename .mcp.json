@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "weather": {
+      "command": "node",
+      "args": ["./dist/index.js"],
+      "env": {
+        "WEATHER_TIMEOUT_SECONDS": "300"
+      }
+    }
+  }
+}
