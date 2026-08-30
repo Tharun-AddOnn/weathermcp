@@ -72,6 +72,16 @@ export function createFetchHandler(options: ServerlessOptions = {}): (req: Reque
   return async function handler(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
+    // Netlify/Vercel capture stderr into the function log. When a client says
+    // "no tools available" this is the only way to see what it actually sent.
+    log(
+      `${request.method} ${url.pathname} ` +
+        `accept=${JSON.stringify(request.headers.get('accept'))} ` +
+        `proto=${JSON.stringify(request.headers.get('mcp-protocol-version'))} ` +
+        `session=${JSON.stringify(request.headers.get('mcp-session-id'))} ` +
+        `ua=${JSON.stringify(request.headers.get('user-agent'))}`,
+    );
+
     if (url.pathname.endsWith('/health')) {
       return json({ ok: true, name: SERVER_NAME, version: SERVER_VERSION, mode: 'serverless-stateless' }, 200);
     }
@@ -111,6 +121,28 @@ export function createFetchHandler(options: ServerlessOptions = {}): (req: Reque
       );
     }
 
+    // Streamable HTTP asks clients to accept both application/json and
+    // text/event-stream on POST, and the SDK enforces it with a 406. Since this
+    // deployment always answers with JSON (enableJsonResponse) and never opens a
+    // stream, a client that accepts only JSON is perfectly serviceable - so
+    // widen the header rather than reject a request we can honour.
+    const accept = request.headers.get('accept') ?? '';
+    const needsJson = !accept.includes('application/json');
+    const needsSse = !accept.includes('text/event-stream');
+
+    let effective = request;
+    if (needsJson || needsSse) {
+      const headers = new Headers(request.headers);
+      headers.set('accept', 'application/json, text/event-stream');
+      effective = new Request(request.url, {
+        method: request.method,
+        headers,
+        body: request.body,
+        // Required by undici whenever a body is present on a constructed Request.
+        duplex: 'half',
+      } as RequestInit & { duplex: 'half' });
+    }
+
     // A fresh server and transport per request. Stateless mode means no session
     // id is issued and none is expected, so nothing needs to survive the call.
     const { server, dispose } = buildServer(config);
@@ -123,7 +155,7 @@ export function createFetchHandler(options: ServerlessOptions = {}): (req: Reque
 
     try {
       await server.connect(transport);
-      return await transport.handleRequest(request);
+      return await transport.handleRequest(effective);
     } catch (err) {
       log(`serverless request failed: ${err instanceof Error ? err.message : String(err)}`);
       return json({ jsonrpc: '2.0', error: { code: -32603, message: 'Internal server error' }, id: null }, 500);

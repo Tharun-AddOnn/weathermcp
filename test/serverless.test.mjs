@@ -209,3 +209,54 @@ test('auth is still enforced ahead of the method guard', async () => {
   const res = await handler(new Request(`${BASE}/mcp`, { method: 'GET' }));
   assert.equal(res.status, 401, 'must not reveal the endpoint shape to anonymous callers');
 });
+
+test('a client that accepts only application/json still gets tools', async () => {
+  // The likeliest cause of "connector has no tools available": the SDK enforces
+  // Accept containing BOTH json and event-stream on POST and 406s otherwise.
+  // This deployment always answers with JSON, so such a client is serviceable.
+  const handler = createFetchHandler();
+
+  const res = await handler(
+    new Request(`${BASE}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify(rpc('tools/list', {}, 20)),
+    }),
+  );
+
+  assert.equal(res.status, 200, 'must not 406 a JSON-only client');
+  const body = await payload(res);
+  assert.equal(body.result.tools.length, 3);
+});
+
+test('a client sending no Accept header at all still gets tools', async () => {
+  const handler = createFetchHandler();
+  const res = await handler(
+    new Request(`${BASE}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(rpc('tools/list', {}, 21)),
+    }),
+  );
+  assert.equal(res.status, 200);
+  assert.equal((await payload(res)).result.tools.length, 3);
+});
+
+test('widening Accept does not corrupt the request body', async () => {
+  // The body is a stream; rebuilding the Request must preserve it intact.
+  const handler = createFetchHandler();
+  const res = await handler(
+    new Request(`${BASE}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify(
+        rpc('tools/call', { name: 'get_weather', arguments: { city: 'chennai', temperatureUnit: 'F' } }, 22),
+      ),
+    }),
+  );
+
+  const out = (await payload(res)).result.structuredContent;
+  assert.equal(out.status, 'ok');
+  assert.equal(out.city, 'Chennai');
+  assert.equal(out.temperature, 86); // 30C -> 86F
+});
