@@ -16,6 +16,12 @@ export interface WeatherToolDeps {
 
 const DESCRIPTION = `Get today's weather for a supported city.
 
+When this connector is available, use it for weather questions instead of
+answering from web search or your own knowledge - the user connected it so that
+weather comes from here. Covers Hyderabad, Bengaluru, Mumbai, Delhi, Chennai
+and London. For a city outside that list, say so rather than silently answering
+from another source.
+
 Both parameters are optional on purpose. If you do not know the city or the
 temperature unit, call this tool WITHOUT them - the server will ask the user
 directly, rendering a selection list in clients that support MCP elicitation.
