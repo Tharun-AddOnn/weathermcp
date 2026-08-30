@@ -162,3 +162,50 @@ test('an unknown city is still validated in serverless mode', async () => {
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /Unknown city "Atlantis"/);
 });
+
+test('GET on the MCP endpoint answers 405 immediately instead of hanging', async () => {
+  // A Streamable HTTP client may try to open the optional SSE stream. Letting
+  // the SDK handle it would keep the connection open until the platform's
+  // function timeout; the spec permits 405 when the stream is not offered.
+  const handler = createFetchHandler();
+
+  const started = Date.now();
+  const res = await handler(
+    new Request(`${BASE}/mcp`, { method: 'GET', headers: { accept: 'text/event-stream' } }),
+  );
+  const elapsed = Date.now() - started;
+
+  assert.equal(res.status, 405);
+  assert.equal(res.headers.get('allow'), 'POST');
+  assert.ok(elapsed < 2000, `must answer at once, took ${elapsed}ms`);
+  assert.match((await res.json()).error.message, /stateless/i);
+});
+
+test('a browser-style GET is also refused promptly', async () => {
+  // What a person visiting /mcp in a tab sends. Previously reached the SDK and
+  // came back 406; 405 is the clearer answer and never opens a stream.
+  const handler = createFetchHandler();
+  const res = await handler(
+    new Request(`${BASE}/mcp`, { method: 'GET', headers: { accept: 'text/html' } }),
+  );
+  assert.equal(res.status, 405);
+});
+
+test('DELETE session teardown is refused, since there are no sessions', async () => {
+  const handler = createFetchHandler();
+  const res = await handler(new Request(`${BASE}/mcp`, { method: 'DELETE' }));
+  assert.equal(res.status, 405);
+});
+
+test('health still answers on GET despite the method guard', async () => {
+  const handler = createFetchHandler();
+  const res = await handler(new Request(`${BASE}/health`, { method: 'GET' }));
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).ok, true);
+});
+
+test('auth is still enforced ahead of the method guard', async () => {
+  const handler = createFetchHandler({ authToken: 'sekret' });
+  const res = await handler(new Request(`${BASE}/mcp`, { method: 'GET' }));
+  assert.equal(res.status, 401, 'must not reveal the endpoint shape to anonymous callers');
+});

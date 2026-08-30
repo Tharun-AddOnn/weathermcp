@@ -87,6 +87,30 @@ export function createFetchHandler(options: ServerlessOptions = {}): (req: Reque
       if (!secretMatches(supplied, options.authToken)) return unauthorized();
     }
 
+    // Streamable HTTP's GET stream and DELETE teardown both assume a session
+    // that outlives the request. Neither exists here, and letting the SDK
+    // handle GET would open an SSE stream that never closes - the function
+    // would just hang until the platform's timeout killed it.
+    //
+    // The spec allows a server that does not offer the optional stream to say
+    // so with 405, and clients must cope with that. Answering immediately is
+    // far better than a 30-second stall.
+    if (request.method === 'GET' || request.method === 'DELETE') {
+      return json(
+        {
+          jsonrpc: '2.0',
+          error: {
+            code: -32000,
+            message:
+              'Method Not Allowed: this deployment is stateless, so it offers no SSE stream and no session teardown. Send JSON-RPC over POST.',
+          },
+          id: null,
+        },
+        405,
+        { allow: 'POST' },
+      );
+    }
+
     // A fresh server and transport per request. Stateless mode means no session
     // id is issued and none is expected, so nothing needs to survive the call.
     const { server, dispose } = buildServer(config);
