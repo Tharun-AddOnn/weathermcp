@@ -1,0 +1,9 @@
+[
+  { "id": "hyderabad", "label": "Hyderabad", "country": "India" },
+  { "id": "bengaluru", "label": "Bengaluru", "country": "India" },
+  { "id": "mumbai", "label": "Mumbai", "country": "India" },
+  { "id": "delhi", "label": "Delhi", "country": "India" },
+  { "id": "chennai", "label": "Chennai", "country": "India" },
+  { "id": "london", "label": "London", "country": "United Kingdom" },
+  { "id": "tokyo", "label": "Tokyo", "country": "Japan" }
+]

@@ -1,0 +1,35 @@
+# fly.io deployment. `fly launch --no-deploy` then `fly deploy`.
+app = "mcp-weather"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3000"
+  WEATHER_NO_LAUNCH = "1"
+  WEATHER_TIMEOUT_SECONDS = "300"
+  # Must match the app's public origin, or fallback prompt links will 404.
+  WEATHER_PUBLIC_URL = "https://mcp-weather.fly.dev"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+
+  # Session state (open MCP sessions, pending prompts) lives in memory, so the
+  # app must run as exactly one always-on instance. Autoscaling past one would
+  # route a client's follow-up requests to a machine that has never heard of it.
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1
+
+  # A tool call blocks until a human answers, so idle-looking connections are
+  # normal and must not be reaped early.
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 200
+    soft_limit = 100
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

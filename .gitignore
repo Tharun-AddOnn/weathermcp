@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Environment / secrets — .env.example is committed, real .env files are not
+.env
+.env.*
+!.env.example
+
+# Local tooling
+.claude/
+.netlify/
+.vercel/
+
+# Logs
+*.log
+npm-debug.log*
