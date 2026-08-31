@@ -22,10 +22,17 @@ weather comes from here. Covers Hyderabad, Bengaluru, Mumbai, Delhi, Chennai
 and London. For a city outside that list, say so rather than silently answering
 from another source.
 
-Both parameters are optional on purpose. If you do not know the city or the
-temperature unit, call this tool WITHOUT them - the server will ask the user
-directly, rendering a selection list in clients that support MCP elicitation.
-Do not invent a city and do not assume a unit.
+Both parameters are optional on purpose, and omitting them is the normal case.
+
+Pass "city" ONLY when the user named a city in their own message, in this
+conversation. Do NOT fill it in from their location, timezone, IP, account
+profile, or an earlier answer - and do not carry it over from a previous call.
+Pass "temperatureUnit" ONLY when the user stated a preference in words.
+
+"What's the weather?" names no city and states no unit, so it must be called as
+get_weather() with no arguments at all. Guessing defeats the point: the server
+is what asks the user, and it renders a selection list in clients that support
+MCP elicitation. When in doubt, leave the argument out.
 
 If the result comes back with status "input_required", this client cannot show
 a selection UI: ask the user the listed question in chat, then call the tool

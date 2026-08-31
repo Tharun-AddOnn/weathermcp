@@ -12,14 +12,18 @@ export const SERVER_VERSION = '1.0.0';
 
 const INSTRUCTIONS = `A weather assistant that demonstrates MCP elicitation.
 
-When the user asks about the weather without naming a city or a temperature unit,
-call get_weather anyway, with only the arguments you actually know. The server
-asks the user for whatever is missing - as a native selection dialog in clients
-that support elicitation, and by handing the question back to you otherwise.
+When the user asks about the weather, call get_weather with only the arguments
+they actually stated in words. "What's the weather?" names nothing, so it is a
+call with no arguments at all.
 
-Never guess a city, and never assume Celsius or Fahrenheit. If a result comes
-back with status "input_required", ask the user the question it describes and
-call get_weather again with their answer.`;
+Never supply a city the user did not name. Their location, timezone, IP address
+and account profile are not answers to "which city?" - the whole point is that
+the server asks them, showing a selection list in clients that support
+elicitation. The same goes for Celsius versus Fahrenheit.
+
+If a result comes back with status "input_required", the client cannot show a
+selection UI: ask the user the question it describes and call get_weather again
+with their answer.`;
 
 export interface ServerConfig {
   defaultTimeoutMs: number;
