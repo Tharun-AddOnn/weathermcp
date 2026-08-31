@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@netlify/blobs": "^11.0.2",
     "express": "^5.1.0",
     "zod": "^4.5.0"
   },

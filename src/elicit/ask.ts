@@ -83,6 +83,11 @@ export class Asker {
     private readonly launchBrowser: boolean = true,
   ) {}
 
+  /** The channel a prompt would use, without sending one. */
+  channelFor(server: Server): Channel {
+    return plannedChannel(server, this.fallback, this.forceChannel);
+  }
+
   async ask(server: Server, req: AskRequest): Promise<AskResult> {
     const channel = plannedChannel(server, this.fallback, this.forceChannel);
 

@@ -5,6 +5,7 @@ import { registerGetWeather } from './tools/getWeather.js';
 import { registerSupportTools } from './tools/support.js';
 import { CityRegistry } from './weather/cities.js';
 import { MockWeatherService, type WeatherService } from './weather/service.js';
+import type { TicketConfig } from './tools/getWeather.js';
 import { log } from './log.js';
 
 export const SERVER_NAME = 'mcp-weather-elicitation';
@@ -37,6 +38,8 @@ export interface ServerConfig {
   launchBrowser: boolean;
   /** Optional path to a JSON array of extra cities. */
   citiesFile?: string;
+  /** Enables the link-to-form dropdown flow for clients that cannot elicit. */
+  tickets?: TicketConfig;
 }
 
 /**
@@ -62,7 +65,13 @@ export function buildServer(
     { capabilities: { tools: {}, logging: {} }, instructions: INSTRUCTIONS },
   );
 
-  registerGetWeather(server, { cities, weather, asker, defaultTimeoutMs: config.defaultTimeoutMs });
+  registerGetWeather(server, {
+    cities,
+    weather,
+    asker,
+    defaultTimeoutMs: config.defaultTimeoutMs,
+    tickets: config.tickets,
+  });
   registerSupportTools(server, {
     cities,
     fallback: config.fallback,

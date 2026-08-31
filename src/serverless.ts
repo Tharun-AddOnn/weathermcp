@@ -1,6 +1,9 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { buildServer, SERVER_NAME, SERVER_VERSION, type ServerConfig } from './server.js';
 import { log } from './log.js';
+import { BlobsTicketStore } from './ticket/blobs.js';
+import { handleFormRequest, isFormPath } from './ticket/form.js';
+import type { TicketStore } from './ticket/store.js';
 
 export interface ServerlessOptions {
   config?: Partial<ServerConfig>;
@@ -8,6 +11,16 @@ export interface ServerlessOptions {
   authToken?: string;
   /** Require the request path to end with this secret, for header-less clients. */
   pathSecret?: string;
+  /**
+   * Public origin used to build selection links, e.g. https://site.netlify.app.
+   * Without it the link-to-form dropdown flow is disabled and the server falls
+   * back to asking in chat.
+   */
+  publicBaseUrl?: string;
+  /** How long a selection link stays valid. Default 15 minutes. */
+  ticketTtlMs?: number;
+  /** Injected by tests; defaults to Netlify Blobs. */
+  ticketStore?: TicketStore;
 }
 
 /**
@@ -19,13 +32,14 @@ export interface ServerlessOptions {
  *   - elicitation, because a server->client request needs a live stream, and the
  *     user's reply would arrive at a different function instance
  *
- * So this handler runs **stateless and conversational only**: every call is a
- * short request/response that either returns weather or returns
- * `status: "input_required"` for the model to ask about in chat. That finishes
- * in milliseconds, well inside any platform's function timeout.
+ * So this handler is **stateless**: every call is a short request/response that
+ * finishes in milliseconds, well inside any platform's function timeout.
  *
- * If you want the native selection dialog, you need a host that keeps a process
- * alive - see DEPLOY.md.
+ * To still offer real dropdowns, missing input is collected out of band: a tool
+ * call issues a ticket and a link, the user picks from `<select>` menus on the
+ * page at /f/:id, and a later call redeems the ticket. Netlify Blobs carries
+ * the answer between those two invocations. Without a store, it degrades to
+ * `status: "input_required"` and the model asks in chat.
  */
 export const SERVERLESS_CONFIG: ServerConfig = {
   defaultTimeoutMs: 0, // never waits on a human
@@ -69,8 +83,17 @@ export function createFetchHandler(options: ServerlessOptions = {}): (req: Reque
     launchBrowser: false,
   } };
 
+  const ticketStore = options.ticketStore ?? new BlobsTicketStore();
+  const ticketTtlMs = options.ticketTtlMs ?? 15 * 60_000;
+
   return async function handler(request: Request): Promise<Response> {
     const url = new URL(request.url);
+
+    // The selection page itself. Served before auth: its own single-use token
+    // is the credential, and the user opening it has no MCP header to send.
+    if (isFormPath(url.pathname)) {
+      return handleFormRequest(request, ticketStore);
+    }
 
     // Netlify/Vercel capture stderr into the function log. When a client says
     // "no tools available" this is the only way to see what it actually sent.
@@ -145,7 +168,11 @@ export function createFetchHandler(options: ServerlessOptions = {}): (req: Reque
 
     // A fresh server and transport per request. Stateless mode means no session
     // id is issued and none is expected, so nothing needs to survive the call.
-    const { server, dispose } = buildServer(config);
+    const baseUrl = options.publicBaseUrl ?? url.origin;
+    const { server, dispose } = buildServer({
+      ...config,
+      tickets: { store: ticketStore, baseUrl: baseUrl.replace(/\/$/, ''), ttlMs: ticketTtlMs },
+    });
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       // Plain JSON rather than an SSE stream: there is nothing to stream, and

@@ -1,5 +1,19 @@
 import { labelFor, normalizeOptions, type FieldSpec } from './fields.js';
-import type { PendingPrompt } from './webform.js';
+
+/**
+ * Everything the form page needs to draw itself. Kept structural so both the
+ * blocking in-memory prompt and a stored ticket satisfy it without conversion.
+ */
+export interface PromptView {
+  title: string;
+  message: string;
+  token: string;
+  fields: FieldSpec[];
+  details?: string;
+  risk?: 'low' | 'medium' | 'high';
+  submitLabel?: string;
+  cancelLabel?: string;
+}
 
 export function escapeHtml(s: unknown): string {
   return String(s)
@@ -190,7 +204,7 @@ function renderField(f: FieldSpec, prior: Record<string, unknown>): string {
 }
 
 export function renderFormPage(
-  prompt: PendingPrompt,
+  prompt: PromptView,
   errors: string[],
   prior: Record<string, unknown> = {},
 ): string {
@@ -217,8 +231,8 @@ export function renderFormPage(
   ${errorBox}
   ${fields}
   <div class="actions">
-    <button type="submit" name="__intent" value="decline" class="secondary">${escapeHtml(prompt.cancelLabel)}</button>
-    <button type="submit" name="__intent" value="accept" class="primary">${escapeHtml(prompt.submitLabel)}</button>
+    <button type="submit" name="__intent" value="decline" class="secondary">${escapeHtml(prompt.cancelLabel ?? 'Cancel')}</button>
+    <button type="submit" name="__intent" value="accept" class="primary">${escapeHtml(prompt.submitLabel ?? 'Continue')}</button>
   </div>
   <p class="foot">Requested by an AI agent via MCP · this page is served locally</p>
 </form>`,

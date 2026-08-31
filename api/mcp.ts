@@ -4,6 +4,7 @@ import { createFetchHandler } from '../dist/serverless.js';
 const handler = createFetchHandler({
   authToken: process.env.WEATHER_AUTH_TOKEN,
   pathSecret: process.env.WEATHER_PATH_SECRET,
+  publicBaseUrl: process.env.WEATHER_PUBLIC_URL,
 });
 
 export default handler;
