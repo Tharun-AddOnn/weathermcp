@@ -93,7 +93,7 @@ No API keys. The weather data is mocked.
 ```bash
 npm install
 npm run build
-npm test          # 46 tests
+npm test          # 63 tests
 ```
 
 ---
@@ -265,9 +265,28 @@ declares at initialize time:
 | 1. `elicitation-form` | client declares `elicitation.form` | **Native selection dialog in the client** |
 | 2. `elicitation-url` | client declares `elicitation.url` | Client hands over a link to a form |
 | 3. `browser` | no elicitation, `--fallback browser` | Local browser page, opened automatically |
-| 4. `conversational` | no elicitation, `--fallback conversational` | Model asks in chat, then re-calls the tool |
+| 4. `browser` link | no elicitation, ticket store configured | **Link to a page with real dropdowns**, then the model redeems a ticket |
+| 5. `conversational` | no elicitation, no ticket store | Model asks in chat, then re-calls the tool |
 
-Tier 4 is the universal one — it uses nothing but ordinary tool calls, so it works in **every** MCP
+### The selection link (tier 4)
+
+A client with no elicitation cannot be interrupted mid-call, so the dropdowns go on a web page
+instead:
+
+```
+get_weather()          → status "awaiting_selection" + selectionUrl + ticket
+user picks on the page → answer saved to the ticket store
+get_weather({ticket})  → the weather
+```
+
+Only the missing fields appear on the form, and anything already known rides along on the ticket -
+the redeeming call carries a ticket and nothing else. Links are single-use, expire after 15 minutes,
+and submissions are validated server-side.
+
+Storage sits behind a `TicketStore`: Netlify Blobs in production (serverless invocations share no
+memory), in-memory for stdio and tests. If storage is unavailable it degrades to tier 5.
+
+Tier 5 is the universal one — it uses nothing but ordinary tool calls, so it works in **every** MCP
 client including ones that will never support elicitation. It's the default for `--http`, because a
 cloud-hosted server can't usefully open anybody's browser.
 
@@ -416,7 +435,7 @@ be set, otherwise `--path-secret`.
 npm test
 ```
 
-46 tests, no network, no API keys. Mapping to the required scenarios:
+63 tests, no network, no API keys. Mapping to the required scenarios:
 
 | # | Scenario | Where |
 |---|---|---|
@@ -482,6 +501,12 @@ The requirement asked to keep these separate, and they genuinely are:
 - Single-select uses `enum` + `enumNames` rather than the newer `oneOf: [{const, title}]`, because
   the legacy form is what shipping clients render today. See the comment in `src/elicit/fields.ts`.
 - Sessions and pending prompts are **in memory** — run a single instance (see [DEPLOY.md](DEPLOY.md)).
+- **A form rendered *inline* in Claude.ai is not currently achievable.** The mechanism is
+  [MCP Apps](https://claude.com/blog/interactive-tools-in-claude) (GA 2026-01-26, `ui://` resources
+  with mime type `text/html;profile=mcp-app`), but Anthropic's rollout centres on directory
+  connectors, and [ext-apps#671](https://github.com/modelcontextprotocol/ext-apps/issues/671) reports
+  custom connectors negotiating the UI capability and having the resource fetched while no iframe
+  ever renders. Hence the selection link. Revisit when that issue closes.
 - On serverless (Netlify, Vercel, Workers), elicitation is **impossible**, not merely absent:
   there is no live stream to send a prompt on and no process to hold the session. That build
   is stateless and conversational-only.
