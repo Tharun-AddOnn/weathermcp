@@ -7,7 +7,7 @@ import { CityRegistry } from './weather/cities.js';
 import { MockWeatherService, type WeatherService } from './weather/service.js';
 import type { TicketConfig } from './tools/getWeather.js';
 import { log } from './log.js';
-import { registerPickerApp, PICKER_URI } from './apps/picker.js';
+import { registerPickerApp, UI_EXTENSION_ID } from './apps/picker.js';
 
 export const SERVER_NAME = 'mcp-weather-elicitation';
 export const SERVER_VERSION = '1.0.0';
@@ -63,8 +63,17 @@ export function buildServer(
 
   const server = new McpServer(
     { name: SERVER_NAME, version: SERVER_VERSION },
-    // `resources` is required for the MCP App template to be discoverable.
-    { capabilities: { tools: {}, logging: {}, resources: {} }, instructions: INSTRUCTIONS },
+    {
+      capabilities: {
+        tools: {},
+        logging: {},
+        // Required for the MCP App template to be discoverable...
+        resources: {},
+        // ...and this is what actually advertises MCP Apps support.
+        extensions: { [UI_EXTENSION_ID]: {} },
+      },
+      instructions: INSTRUCTIONS,
+    },
   );
 
   registerGetWeather(server, {

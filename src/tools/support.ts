@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { detectSupport, plannedChannel, type Channel, type FallbackMode } from '../elicit/ask.js';
 import type { CityRegistry } from '../weather/cities.js';
 import { TEMPERATURE_UNITS } from '../weather/units.js';
+import { clientUiExtension, UI_EXTENSION_ID } from '../apps/picker.js';
 
 export interface SupportToolDeps {
   cities: CityRegistry;
@@ -68,6 +69,8 @@ export function registerSupportTools(server: McpServer, deps: SupportToolDeps): 
         channel: z.string(),
         rendering: z.string(),
         fallbackMode: z.string(),
+        clientSupportsMcpApps: z.boolean(),
+        clientCapabilitiesRaw: z.string(),
         defaultTimeoutSeconds: z.number(),
       },
       annotations: { readOnlyHint: true, openWorldHint: false, idempotentHint: true },
@@ -77,6 +80,8 @@ export function registerSupportTools(server: McpServer, deps: SupportToolDeps): 
       const info = server.server.getClientVersion();
       const channel = plannedChannel(server.server, fallback, forceChannel);
       const client = info ? `${info.name} ${info.version}` : 'unknown';
+      const rawCaps = server.server.getClientCapabilities();
+      const uiExt = clientUiExtension(rawCaps);
 
       const rendering: Record<Channel, string> = {
         'elicitation-form': 'A native selection dialog rendered by the client itself.',
@@ -95,6 +100,8 @@ export function registerSupportTools(server: McpServer, deps: SupportToolDeps): 
               `Elicitation - form: ${support.form ? 'yes' : 'no'}, url: ${support.url ? 'yes' : 'no'}`,
               `Prompts will use: ${channel}${forceChannel ? ' (forced)' : ''}`,
               rendering[channel],
+              `MCP Apps (${UI_EXTENSION_ID}): ${uiExt !== undefined ? 'advertised by this client' : 'NOT advertised'}`,
+              `Raw client capabilities: ${JSON.stringify(rawCaps ?? null)}`,
             ].join('\n'),
           },
         ],
@@ -108,6 +115,8 @@ export function registerSupportTools(server: McpServer, deps: SupportToolDeps): 
           channel,
           rendering: rendering[channel],
           fallbackMode: fallback,
+          clientSupportsMcpApps: uiExt !== undefined,
+          clientCapabilitiesRaw: JSON.stringify(rawCaps ?? null),
           defaultTimeoutSeconds: defaultTimeoutMs / 1000,
         },
       };

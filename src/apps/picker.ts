@@ -22,6 +22,20 @@ export const PICKER_URI = 'ui://weather/picker.html';
 /** The MIME type MCP Apps uses to mark a resource as an inline UI template. */
 export const APP_MIME_TYPE = 'text/html;profile=mcp-app';
 
+/**
+ * MCP Apps is an extension, not a core capability, so both sides advertise it
+ * under `capabilities.extensions` with this reverse-DNS id. A server that skips
+ * this is not offering MCP Apps at all, however correct its `_meta` binding is -
+ * which is exactly the mistake the first version of this file made.
+ */
+export const UI_EXTENSION_ID = 'io.modelcontextprotocol/ui';
+
+/** Reads whatever the connected client advertised for MCP Apps, if anything. */
+export function clientUiExtension(caps: unknown): unknown {
+  const extensions = (caps as { extensions?: Record<string, unknown> } | undefined)?.extensions;
+  return extensions?.[UI_EXTENSION_ID];
+}
+
 function pickerHtml(cities: { id: string; label: string }[]): string {
   const cityOptions = cities
     .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`)
