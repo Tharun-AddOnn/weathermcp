@@ -8,6 +8,7 @@ import { resolveUnit, TEMPERATURE_UNITS, UnknownUnitError, unitSymbol, type Temp
 import { describeReading, WeatherServiceError, type WeatherService } from '../weather/service.js';
 import { formPathFor } from '../ticket/form.js';
 import type { TicketStore } from '../ticket/store.js';
+import { PICKER_URI } from '../apps/picker.js';
 
 export interface TicketConfig {
   store: TicketStore;
@@ -134,6 +135,9 @@ export function registerGetWeather(server: McpServer, deps: WeatherToolDeps): vo
         channel: z.string(),
       },
       annotations: { readOnlyHint: true, openWorldHint: false, idempotentHint: true },
+      // MCP Apps binding. A host that understands this renders the picker
+      // inline; every other client ignores it and takes an existing tier.
+      _meta: { ui: { resourceUri: PICKER_URI } },
     },
     async (args) => {
       logger.info('tool called', {

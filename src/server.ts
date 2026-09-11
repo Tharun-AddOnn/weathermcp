@@ -7,6 +7,7 @@ import { CityRegistry } from './weather/cities.js';
 import { MockWeatherService, type WeatherService } from './weather/service.js';
 import type { TicketConfig } from './tools/getWeather.js';
 import { log } from './log.js';
+import { registerPickerApp, PICKER_URI } from './apps/picker.js';
 
 export const SERVER_NAME = 'mcp-weather-elicitation';
 export const SERVER_VERSION = '1.0.0';
@@ -62,7 +63,8 @@ export function buildServer(
 
   const server = new McpServer(
     { name: SERVER_NAME, version: SERVER_VERSION },
-    { capabilities: { tools: {}, logging: {} }, instructions: INSTRUCTIONS },
+    // `resources` is required for the MCP App template to be discoverable.
+    { capabilities: { tools: {}, logging: {}, resources: {} }, instructions: INSTRUCTIONS },
   );
 
   registerGetWeather(server, {
@@ -72,6 +74,7 @@ export function buildServer(
     defaultTimeoutMs: config.defaultTimeoutMs,
     tickets: config.tickets,
   });
+  registerPickerApp(server, cities);
   registerSupportTools(server, {
     cities,
     fallback: config.fallback,
