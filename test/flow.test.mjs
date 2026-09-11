@@ -313,3 +313,18 @@ test('client_capabilities separates what the server offers from what the client 
   assert.ok(res.structuredContent.serverOffers.includes('elicitation/create (form)'));
   await withoutUi.cleanup();
 });
+
+test('--force-channel conversational is honoured even when fallback is browser', async () => {
+  // Regression: the tier-3 cascade clause (`|| fallback === 'browser'`) used to
+  // swallow an explicit force, so the flag silently opened a local form instead
+  // of reaching the conversational tier.
+  const s = await connect(null, {}, { forceChannel: 'conversational', fallback: 'browser' });
+
+  const started = Date.now();
+  const res = await s.client.callTool({ name: 'get_weather', arguments: {} });
+
+  assert.ok(Date.now() - started < 3000, 'must not block on a browser form');
+  assert.equal(res.structuredContent.status, 'input_required');
+  assert.equal(res.structuredContent.channel, 'conversational');
+  await s.cleanup();
+});

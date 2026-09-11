@@ -109,8 +109,11 @@ export class Asker {
       }
     }
 
-    // Tier 3 - serve a form ourselves and point a browser at it.
-    if (channel === 'browser' || this.fallback === 'browser') {
+    // Tier 3 - serve a form ourselves and point a browser at it. The second
+    // clause is the cascade: an elicitation tier that threw should still try the
+    // browser. It must not apply to an explicitly forced channel, or
+    // `--force-channel conversational` could never reach tier 4.
+    if (channel === 'browser' || (!this.forceChannel && this.fallback === 'browser')) {
       try {
         return await this.viaBrowser(req);
       } catch (err) {
