@@ -4,6 +4,8 @@ import { log } from './log.js';
 import { BlobsTicketStore } from './ticket/blobs.js';
 import { handleFormRequest, isFormPath } from './ticket/form.js';
 import type { TicketStore } from './ticket/store.js';
+import { readLastClient, recordClient } from './diag.js';
+import { UI_EXTENSION_ID } from './apps/picker.js';
 
 export interface ServerlessOptions {
   config?: Partial<ServerConfig>;
@@ -105,6 +107,21 @@ export function createFetchHandler(options: ServerlessOptions = {}): (req: Reque
         `ua=${JSON.stringify(request.headers.get('user-agent'))}`,
     );
 
+    // Reports what the last client declared at initialize. See src/diag.ts.
+    if (url.pathname.endsWith('/diag')) {
+      const last = await readLastClient();
+      const extensions = (last?.capabilities as { extensions?: Record<string, unknown> } | null)?.extensions;
+      return json(
+        {
+          lastClient: last ?? null,
+          advertisesMcpApps: extensions ? UI_EXTENSION_ID in extensions : false,
+          advertisesElicitation:
+            Boolean((last?.capabilities as { elicitation?: unknown } | null)?.elicitation),
+        },
+        200,
+      );
+    }
+
     if (url.pathname.endsWith('/health')) {
       return json({ ok: true, name: SERVER_NAME, version: SERVER_VERSION, mode: 'serverless-stateless' }, 200);
     }
@@ -144,27 +161,26 @@ export function createFetchHandler(options: ServerlessOptions = {}): (req: Reque
       );
     }
 
+    // Read the body once. It is needed twice - to note what the client declared
+    // at initialize, and to hand to the transport - and a stream can only be
+    // consumed once.
+    const bodyText = await request.text();
+
+    try {
+      const parsed = JSON.parse(bodyText) as { method?: string; params?: unknown };
+      if (parsed?.method === 'initialize') await recordClient(parsed.params);
+    } catch {
+      // Not JSON, or not initialize; the transport will produce the error.
+    }
+
     // Streamable HTTP asks clients to accept both application/json and
     // text/event-stream on POST, and the SDK enforces it with a 406. Since this
     // deployment always answers with JSON (enableJsonResponse) and never opens a
     // stream, a client that accepts only JSON is perfectly serviceable - so
     // widen the header rather than reject a request we can honour.
-    const accept = request.headers.get('accept') ?? '';
-    const needsJson = !accept.includes('application/json');
-    const needsSse = !accept.includes('text/event-stream');
-
-    let effective = request;
-    if (needsJson || needsSse) {
-      const headers = new Headers(request.headers);
-      headers.set('accept', 'application/json, text/event-stream');
-      effective = new Request(request.url, {
-        method: request.method,
-        headers,
-        body: request.body,
-        // Required by undici whenever a body is present on a constructed Request.
-        duplex: 'half',
-      } as RequestInit & { duplex: 'half' });
-    }
+    const headers = new Headers(request.headers);
+    headers.set('accept', 'application/json, text/event-stream');
+    const effective = new Request(request.url, { method: request.method, headers, body: bodyText });
 
     // A fresh server and transport per request. Stateless mode means no session
     // id is issued and none is expected, so nothing needs to survive the call.
