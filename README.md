@@ -51,6 +51,68 @@ not two. Say *"weather in Mumbai in Fahrenheit"* and you get none.
 
 ---
 
+## 1b. The demo page, and what it does not prove
+
+`https://weathermcp.netlify.app/` serves a working demo: a chat mock-up, a city dropdown, a unit
+dropdown, submit and cancel, and a result.
+
+**It is a custom frontend, not native MCP elicitation.** The page is a genuine MCP client — it
+speaks JSON-RPC to the same `/mcp` endpoint an AI agent uses ([public/mcp-client.js](public/mcp-client.js))
+— but *the page* draws the form. In native elicitation the AI client draws it from a schema the
+server sends. Showing this page proves the tool and transport work; it proves nothing about whether
+ChatGPT or Claude will render a form of their own.
+
+```
+Native elicitation                      Custom frontend (this page)
+──────────────────                      ───────────────────────────
+server sends requestedSchema            server sends available options
+AI client renders the dialog            the page renders the form
+needs client support                    needs none
+```
+
+### Sequence — native elicitation
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as AI Agent
+    participant C as MCP Client
+    participant S as MCP Server
+    U->>A: "What is the weather?"
+    A->>C: tools/call get_weather {}
+    C->>S: tools/call (id 2)
+    S-->>C: elicitation/create (mode form, requestedSchema)
+    C-->>U: renders the form
+    U-->>C: picks city + unit
+    C-->>S: result { action accept, content }
+    S->>S: look up mock weather
+    S-->>C: tools/call result (id 2)
+    C-->>A: "Weather in Hyderabad: 29C"
+    A-->>U: answer
+```
+
+Note `tools/call` id 2 stays open across the whole exchange — that is why a live, bidirectional
+connection is required, and why serverless cannot do it.
+
+### Architecture
+
+```
+AI Agent
+   |
+   |  MCP over HTTPS
+   v
+Netlify Function  (/mcp, /.netlify/functions/mcp)
+   |
+   |  MCP TypeScript SDK
+   v
+get_weather tool
+   |
+   v
+Mock weather data
+```
+
+---
+
 ## 2. Architecture
 
 ```
@@ -93,7 +155,7 @@ No API keys. The weather data is mocked.
 ```bash
 npm install
 npm run build
-npm test          # 63 tests
+npm test          # 73 tests
 ```
 
 ---
@@ -435,7 +497,7 @@ be set, otherwise `--path-secret`.
 npm test
 ```
 
-63 tests, no network, no API keys. Mapping to the required scenarios:
+73 tests, no network, no API keys. Mapping to the required scenarios:
 
 | # | Scenario | Where |
 |---|---|---|
@@ -571,3 +633,42 @@ See **[DEPLOY.md](DEPLOY.md)**. Three paths, and the choice decides whether you 
 
 Included: [Dockerfile](Dockerfile), [fly.toml](fly.toml), [netlify.toml](netlify.toml),
 [netlify/functions/mcp.mts](netlify/functions/mcp.mts), [api/mcp.ts](api/mcp.ts).
+
+---
+
+## 18. Acceptance checklist
+
+The original spec's Definition of Done asked for form elicitation *and* a tested Netlify
+deployment. Those are mutually exclusive — elicitation needs a live bidirectional connection and a
+process that remembers the handshake; Netlify Functions are stateless with a 30s ceiling. So the
+checklist is split by what each artifact can actually prove.
+
+### Verified — local (stdio)
+
+- [x] MCP server starts locally
+- [x] Tool registered, discoverable
+- [x] Requests **form elicitation** when inputs are missing
+- [x] Elicitation schema is valid (flat primitives, `enum` + `enumNames`)
+- [x] Accepted form data handled
+- [x] Decline and cancel handled — provider never called
+- [x] Mock weather returned, C→F conversion correct
+- [x] Invalid city / unit rejected
+- [x] 73 automated tests pass, typecheck passes, build passes
+
+### Verified — deployed (Netlify)
+
+- [x] Netlify Function implemented and live
+- [x] Endpoint reachable over HTTPS, tested with a real MCP client
+- [x] `initialize`, `tools/list`, `tools/call` all work
+- [x] Demo frontend works against the live endpoint
+- [x] Missing input handled without elicitation — link flow or chat question
+- [x] Native elicitation vs custom frontend documented (§1b, §7)
+
+### Not achievable — and why
+
+- [ ] ~~Form elicitation on the deployed endpoint~~ — serverless has no reverse channel
+- [ ] ~~A form rendered inside Claude.ai~~ — elicitation unsupported ([#153](https://github.com/anthropics/claude-ai-mcp/issues/153));
+      MCP Apps implemented and deployed but does not render for custom connectors
+- [ ] ~~ChatGPT compatibility~~ — untested, so unclaimed
+
+To see elicitation end to end, use `npm run inspect` or Claude Code. The Inspector renders it.

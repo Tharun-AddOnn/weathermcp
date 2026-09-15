@@ -1,8 +1,123 @@
 <!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
-<title>Weather MCP server</title>
-<style>body{font:15px/1.6 system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem}code{background:#f4f4f5;padding:.15em .4em;border-radius:4px}</style>
-<h1>Weather MCP server</h1>
-<p>This host serves a Model Context Protocol endpoint at <code>/mcp</code>.</p>
-<p>It runs stateless, so it answers tool calls but cannot show interactive prompts.
-Point an MCP client at <code>/mcp</code>; check <code>/health</code> for status.</p>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCP Elicitation POC</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg:#f6f7f9; --card:#fff; --fg:#16181d; --muted:#6b7280; --border:#e3e6ea;
+    --accent:#4f46e5; --accent-fg:#fff; --user:#eef2ff;
+    --danger:#b42318; --danger-bg:#fef3f2; --danger-border:#fecdca;
+    --note:#7c4a03; --note-bg:#fffaeb; --note-border:#fedf89;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0f1115; --card:#171a21; --fg:#e6e8ec; --muted:#9aa1ad; --border:#262b34;
+      --accent:#6366f1; --user:#1e2233;
+      --danger:#fda29b; --danger-bg:#2a1614; --danger-border:#5b2220;
+      --note:#fec84b; --note-bg:#2a2113; --note-border:#5b4420;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:32px 16px;background:var(--bg);color:var(--fg);
+       font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:640px;margin:0 auto}
+  h1{margin:0 0 4px;font-size:22px;letter-spacing:-.02em}
+  .sub{margin:0 0 20px;color:var(--muted)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;
+        box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05)}
+  .note{background:var(--note-bg);border:1px solid var(--note-border);color:var(--note);
+        border-radius:10px;padding:11px 14px;font-size:13px;margin-bottom:18px}
+  .note b{font-weight:650}
+  .msg{margin-bottom:12px}
+  .who{font-size:12px;font-weight:650;text-transform:uppercase;letter-spacing:.04em;
+       color:var(--muted);margin-bottom:3px}
+  .bubble{padding:10px 13px;border-radius:10px;background:var(--bg);border:1px solid var(--border)}
+  .msg.user .bubble{background:var(--user)}
+  form{margin-top:18px;padding-top:18px;border-top:1px solid var(--border)}
+  label{display:block;font-weight:550;margin:14px 0 5px;font-size:14px}
+  input,select{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:9px;
+               background:var(--bg);color:var(--fg);font:inherit;outline:none}
+  input:focus,select:focus{border-color:var(--accent);
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+  .err{color:var(--danger);font-size:13px;margin-top:5px;min-height:1px}
+  .actions{display:flex;gap:10px;margin-top:20px}
+  button{flex:1;padding:10px 16px;border-radius:9px;font:inherit;font-weight:600;cursor:pointer;
+         border:1px solid var(--border);background:transparent;color:var(--fg)}
+  button.primary{background:var(--accent);color:var(--accent-fg);border-color:transparent}
+  button:disabled{opacity:.55;cursor:default}
+  .banner{margin-top:16px;padding:11px 14px;border-radius:10px;font-size:14px}
+  .banner.error{background:var(--danger-bg);border:1px solid var(--danger-border);color:var(--danger)}
+  .result{margin-top:18px;padding:16px;border-radius:10px;background:var(--bg);
+          border:1px solid var(--border)}
+  .result .big{font-size:24px;font-weight:650;letter-spacing:-.02em}
+  .foot{margin-top:18px;color:var(--muted);font-size:12px;text-align:center}
+  .foot a{color:inherit}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>MCP Elicitation POC</h1>
+  <p class="sub">Request missing user information through an MCP form.</p>
+
+  <div class="card">
+    <!--
+      Requirement 7: this page is a CUSTOM FRONTEND, not native MCP elicitation.
+      It is a real MCP client - it speaks JSON-RPC to /mcp - but the form below
+      is drawn by this page, not by an AI agent. Saying otherwise would be the
+      exact conflation the spec warns against.
+    -->
+    <div class="note">
+      <b>This is a custom frontend, not native MCP elicitation.</b>
+      This page is a real MCP client and talks to the same <code>/mcp</code> endpoint an AI agent
+      uses, but <em>this page</em> draws the form. In native elicitation the AI client renders it.
+      See the README for the distinction.
+    </div>
+
+    <div id="chat">
+      <div class="msg user">
+        <div class="who">User</div>
+        <div class="bubble">What is the weather?</div>
+      </div>
+      <div class="msg" id="assistantMsg" hidden>
+        <div class="who">Assistant</div>
+        <div class="bubble" id="assistantText">I need a few details to check the weather.</div>
+      </div>
+    </div>
+
+    <div class="banner error" id="fatal" hidden></div>
+
+    <form id="form" hidden novalidate>
+      <label for="city">City</label>
+      <select id="city" name="city"></select>
+      <div class="err" id="cityErr"></div>
+
+      <label for="unit">Temperature Unit</label>
+      <select id="unit" name="unit"></select>
+      <div class="err" id="unitErr"></div>
+
+      <div class="actions">
+        <button type="button" id="cancel">Cancel</button>
+        <button type="submit" id="submit" class="primary">Submit</button>
+      </div>
+    </form>
+
+    <div class="result" id="result" hidden>
+      <div class="who">Result</div>
+      <div class="big" id="resultBig"></div>
+      <div id="resultSub" class="sub" style="margin:4px 0 0"></div>
+    </div>
+
+    <div class="banner error" id="error" hidden></div>
+  </div>
+
+  <p class="foot">
+    MCP endpoint: <code id="endpoint"></code> · <a href="/health">health</a> · <a href="/diag">diag</a>
+  </p>
+</div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

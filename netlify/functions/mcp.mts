@@ -21,5 +21,5 @@ export default async (request: Request, _context: Context): Promise<Response> =>
 
 export const config: Config = {
   // /f/:id is the selection page a user opens in their browser.
-  path: ['/mcp', '/mcp/:secret', '/health', '/diag', '/f/:id'],
+  path: ['/mcp', '/mcp/:secret', '/.netlify/functions/mcp', '/health', '/diag', '/f/:id'],
 };
